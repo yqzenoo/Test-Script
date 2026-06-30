@@ -9,51 +9,51 @@ local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local Workspace = game:GetService("Workspace")
 local camera = Workspace.CurrentCamera
-local ContextActionService = game:GetService("ContextActionService")
+local TouchGui = Instance.new("ScreenGui")
+local ToggleButton = Instance.new("TextButton")
 
+-- Mobile detection
 local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 
--- Create toggle button for mobile/PC
-local TouchGui = Instance.new("ScreenGui")
-TouchGui.Name = "BlueBerryToggleGUI"
-TouchGui.Parent = CoreGui
-TouchGui.ResetOnSpawn = false
+-- UI Toggle Button (B key or on-screen button)
+local UIHidden = false
 
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Name = "ToggleButton"
+-- Create mobile toggle button
+ToggleButton.Name = "BlueBerryToggle"
 ToggleButton.Parent = TouchGui
 ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 110, 255)
 ToggleButton.BackgroundTransparency = 0.3
 ToggleButton.BorderSizePixel = 0
-ToggleButton.Position = UDim2.new(0.5, -25, 0.9, -25)
+ToggleButton.Position = UDim2.new(0.5, -25, 0.95, -25)
 ToggleButton.Size = UDim2.new(0, 50, 0, 50)
 ToggleButton.Text = "B"
 ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleButton.TextSize = 24
 ToggleButton.TextScaled = true
 ToggleButton.Font = Enum.Font.SourceSansBold
-ToggleButton.Visible = true
+ToggleButton.Visible = isMobile
 ToggleButton.Active = true
 ToggleButton.Draggable = true
 
+-- Corner rounding
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 25)
 UICorner.Parent = ToggleButton
 
-local UIHidden = false
+-- Toggle function
 local function toggleUI()
     UIHidden = not UIHidden
     Fluent:SetVisibility(not UIHidden)
 end
 
 ToggleButton.MouseButton1Click:Connect(toggleUI)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.B then
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.B and not isMobile then
         toggleUI()
     end
 end)
+
+TouchGui.Parent = CoreGui
 
 local Settings = {
     SilentAim = false,
@@ -78,43 +78,11 @@ local Settings = {
     }
 }
 
--- FOV Circle (Drawing only works on PC, use ScreenGui for mobile)
-local FOVCircle
-local FOVFrame
-local FOVGui
-
-if not isMobile then
-    FOVCircle = Drawing.new("Circle")
-    FOVCircle.Thickness = 1.5
-    FOVCircle.NumSides = 60
-    FOVCircle.Filled = false
-    FOVCircle.Transparency = 1
-else
-    FOVGui = Instance.new("ScreenGui")
-    FOVGui.Name = "FOVGui"
-    FOVGui.Parent = CoreGui
-    FOVGui.ResetOnSpawn = false
-    FOVGui.Enabled = false
-    
-    FOVFrame = Instance.new("Frame")
-    FOVFrame.Name = "FOVFrame"
-    FOVFrame.Parent = FOVGui
-    FOVFrame.BackgroundTransparency = 1
-    FOVFrame.BorderSizePixel = 0
-    FOVFrame.Size = UDim2.new(0, 200, 0, 200)
-    FOVFrame.Position = UDim2.new(0.5, -100, 0.5, -100)
-    
-    local FOVCircleImg = Instance.new("ImageLabel")
-    FOVCircleImg.Name = "FOVCircle"
-    FOVCircleImg.Parent = FOVFrame
-    FOVCircleImg.BackgroundTransparency = 1
-    FOVCircleImg.Size = UDim2.new(1, 0, 1, 0)
-    FOVCircleImg.Position = UDim2.new(0, 0, 0, 0)
-    FOVCircleImg.Image = "rbxassetid://2665436045"
-    FOVCircleImg.ImageColor3 = Settings.FOV.Color
-    FOVCircleImg.ImageTransparency = 0.5
-    FOVCircleImg.ScaleType = Enum.ScaleType.Fit
-end
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 1.5
+FOVCircle.NumSides = 60
+FOVCircle.Filled = false
+FOVCircle.Transparency = 1
 
 Fluent:RegisterCustomTheme("AbyssBlue", {
     Accent = Color3.fromRGB(0, 110, 255),
@@ -217,36 +185,38 @@ local function getclosestplayer()
 end
 
 local closesthitpart = nil
+local mobileAimbotActive = false
 
+-- Mobile aim assist (tap to aim)
+local function onTouchBegan(touch)
+    if isMobile and Settings.Aimbot and closesthitpart then
+        mobileAimbotActive = true
+    end
+end
 
-local mobileAiming = false
-local mobileAimConnection = nil
+local function onTouchEnded(touch)
+    if isMobile then
+        mobileAimbotActive = false
+    end
+end
+
+UserInputService.TouchStarted:Connect(onTouchBegan)
+UserInputService.TouchEnded:Connect(onTouchEnded)
 
 RunService.Heartbeat:Connect(function()
     closesthitpart = (Settings.SilentAim or Settings.Aimbot) and getclosestplayer() or nil
     
-    -- Update FOV
     if Settings.FOV.Enabled then
-        if not isMobile then
-            FOVCircle.Visible = true
-            FOVCircle.Position = UserInputService:GetMouseLocation()
-            FOVCircle.Radius = Settings.FOV.Radius
-            FOVCircle.Color = Settings.FOV.Color
-        else
-            FOVGui.Enabled = true
-            local radius = Settings.FOV.Radius * 2
-            FOVFrame.Size = UDim2.new(0, radius, 0, radius)
-            FOVFrame.Position = UDim2.new(0.5, -radius/2, 0.5, -radius/2)
-        end
+        FOVCircle.Visible = true
+        FOVCircle.Position = UserInputService:GetMouseLocation()
+        FOVCircle.Radius = Settings.FOV.Radius
+        FOVCircle.Color = Settings.FOV.Color
     else
-        if not isMobile then
-            FOVCircle.Visible = false
-        else
-            FOVGui.Enabled = false
-        end
+        FOVCircle.Visible = false
     end
 
-    if not isMobile and Settings.Aimbot and closesthitpart and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+    -- PC aimbot (right mouse button)
+    if Settings.Aimbot and closesthitpart and not isMobile and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local screenpos, onscreen = camera:WorldToViewportPoint(closesthitpart.Position)
         if onscreen then
             local mousepos = UserInputService:GetMouseLocation()
@@ -256,8 +226,8 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
-    -- Mobile Aimbot (touch-based, smooth following)
-    if isMobile and Settings.Aimbot and closesthitpart and mobileAiming then
+    -- Mobile aimbot (touch based)
+    if Settings.Aimbot and closesthitpart and isMobile and mobileAimbotActive then
         local screenpos, onscreen = camera:WorldToViewportPoint(closesthitpart.Position)
         if onscreen then
             local mousepos = UserInputService:GetMouseLocation()
@@ -267,20 +237,6 @@ RunService.Heartbeat:Connect(function()
         end
     end
 end)
-
-if isMobile then
-    UserInputService.TouchStarted:Connect(function(touch, gameProcessed)
-        if gameProcessed then return end
-        if Settings.Aimbot then
-            mobileAiming = true
-        end
-    end)
-
-    UserInputService.TouchEnded:Connect(function(touch, gameProcessed)
-        if gameProcessed then return end
-        mobileAiming = false
-    end)
-end
 
 UserInputService.JumpRequest:Connect(function()
     if Settings.InfiniteJump then
@@ -511,8 +467,7 @@ SettingsTab:AddSection("Interface")
 SettingsTab:AddButton({
     Title = "Unload",
     Callback = function()
-        if FOVCircle then FOVCircle:Destroy() end
-        if FOVGui then FOVGui:Destroy() end
+        FOVCircle:Destroy()
         ESPFolder:Destroy()
         TouchGui:Destroy()
         Fluent:Destroy()
