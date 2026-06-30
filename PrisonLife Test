@@ -1,6 +1,10 @@
-local Fluent = loadstring(game:HttpGet(
-    "https://github.com/StyearX/Fluent-Modded/releases/download/Fluent/FluentPro"
-))()
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+local Options = Library.Options
+local Toggles = Library.Toggles
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -9,51 +13,6 @@ local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local Workspace = game:GetService("Workspace")
 local camera = Workspace.CurrentCamera
-local TouchGui = Instance.new("ScreenGui")
-local ToggleButton = Instance.new("TextButton")
-
--- Mobile detection
-local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
-
--- UI Toggle Button (B key or on-screen button)
-local UIHidden = false
-
--- Create mobile toggle button
-ToggleButton.Name = "BlueBerryToggle"
-ToggleButton.Parent = TouchGui
-ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 110, 255)
-ToggleButton.BackgroundTransparency = 0.3
-ToggleButton.BorderSizePixel = 0
-ToggleButton.Position = UDim2.new(0.5, -25, 0.95, -25)
-ToggleButton.Size = UDim2.new(0, 50, 0, 50)
-ToggleButton.Text = "B"
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.TextSize = 24
-ToggleButton.TextScaled = true
-ToggleButton.Font = Enum.Font.SourceSansBold
-ToggleButton.Visible = isMobile
-ToggleButton.Active = true
-ToggleButton.Draggable = true
-
--- Corner rounding
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 25)
-UICorner.Parent = ToggleButton
-
--- Toggle function
-local function toggleUI()
-    UIHidden = not UIHidden
-    Fluent:SetVisibility(not UIHidden)
-end
-
-ToggleButton.MouseButton1Click:Connect(toggleUI)
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.B and not isMobile then
-        toggleUI()
-    end
-end)
-
-TouchGui.Parent = CoreGui
 
 local Settings = {
     SilentAim = false,
@@ -62,11 +21,12 @@ local Settings = {
     TeamCheck = true,
     VisibleCheck = true,
     InfiniteJump = false,
-    
+    MobileAimLock = false,
+
     FOV = {
         Enabled = false,
         Radius = 100,
-        Color = Color3.fromRGB(0, 110, 255)
+        Color = Color3.fromRGB(0, 110, 255),
     },
 
     ESP = {
@@ -74,8 +34,8 @@ local Settings = {
         Chams = false,
         Names = false,
         Health = false,
-        TeamCheck = true
-    }
+        TeamCheck = true,
+    },
 }
 
 local FOVCircle = Drawing.new("Circle")
@@ -84,43 +44,24 @@ FOVCircle.NumSides = 60
 FOVCircle.Filled = false
 FOVCircle.Transparency = 1
 
-Fluent:RegisterCustomTheme("AbyssBlue", {
-    Accent = Color3.fromRGB(0, 110, 255),
-    AcrylicMain = Color3.fromRGB(2, 3, 8),
-    Background = Color3.fromRGB(2, 3, 8),
-    Text = Color3.fromRGB(240, 245, 255),
-    IconColor = Color3.fromRGB(0, 150, 255),
-    IconSize = 18,
-    ShineEnabled = true,
-    Shine = {
-        Speed = 0.25,
-        RotationSpeed = 12,
-        ColorSequence = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 15, 40)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 60, 140)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 15, 40))
-        })
-    },
-    StrokeShine = true,
-    StrokeDark = Color3.fromRGB(0, 30, 70)
-})
-
-local Window = Fluent:CreateWindow({
+local Window = Library:CreateWindow({
     Title = "BlueBerry Hub",
-    SubTitle = "by KaIdo",
-    TabWidth = 120,
-    Size = UDim2.fromOffset(560, 460),
-    Acrylic = true,
-    Theme = "AbyssBlue",
-    MinimizeKey = Enum.KeyCode.LeftControl,
-    Search = true
+    Footer = "by KaIdo",
+    Icon = 95816097006870,
+    NotifySide = "Right",
+    ShowCustomCursor = true,
+    Resizable = false,
+    MobileButtonsSide = "Right",
 })
 
-local CombatTab = Window:AddTab({ Title = "Combat", Icon = "solar/crosshair-bold" })
-local VisualTab = Window:AddTab({ Title = "Visuals", Icon = "solar/eye-bold" })
-local TeleportTab = Window:AddTab({ Title = "Teleport", Icon = "solar/map-point-bold" })
-local MiscTab = Window:AddTab({ Title = "Misc", Icon = "solar/widget-bold" })
-local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "solar/settings-bold" })
+local Tabs = {
+    Combat = Window:AddTab("Combat", "crosshair"),
+    Visuals = Window:AddTab("Visuals", "eye"),
+    Teleport = Window:AddTab("Teleport", "map-pin"),
+    Misc = Window:AddTab("Misc", "settings-2"),
+    ["UI Settings"] = Window:AddTab("UI Settings", "settings"),
+}
+
 
 local function getdirection(origin, position)
     return (position - origin).Unit
@@ -135,7 +76,7 @@ local function isvisible(targetpart)
 
     local raycastparams = RaycastParams.new()
     raycastparams.FilterType = Enum.RaycastFilterType.Exclude
-    raycastparams.FilterDescendantsInstances = {character, camera}
+    raycastparams.FilterDescendantsInstances = { character, camera }
     raycastparams.IgnoreWater = true
 
     local result = Workspace:Raycast(origin, direction, raycastparams)
@@ -158,24 +99,24 @@ local function getclosestplayer()
 
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
-            if not issameteam(player) then
-                local humanoidrootpart = player.Character:FindFirstChild("HumanoidRootPart")
-                local humanoid = player.Character:FindFirstChild("Humanoid")
+            if Settings.TeamCheck and issameteam(player) then continue end
 
-                if humanoidrootpart and humanoid and humanoid.Health > 0 then
-                    local screenpos, onscreen = camera:WorldToViewportPoint(humanoidrootpart.Position)
+            local humanoidrootpart = player.Character:FindFirstChild("HumanoidRootPart")
+            local humanoid = player.Character:FindFirstChild("Humanoid")
 
-                    if onscreen then
-                        if Settings.VisibleCheck and not isvisible(humanoidrootpart) then continue end
-                        
-                        local distance = (Vector2.new(screenpos.X, screenpos.Y) - mousepos).Magnitude
+            if humanoidrootpart and humanoid and humanoid.Health > 0 then
+                local screenpos, onscreen = camera:WorldToViewportPoint(humanoidrootpart.Position)
 
-                        if Settings.FOV.Enabled and distance > Settings.FOV.Radius then continue end
+                if onscreen then
+                    if Settings.VisibleCheck and not isvisible(humanoidrootpart) then continue end
 
-                        if distance < closestdistance then
-                            closestdistance = distance
-                            closestpart = humanoidrootpart
-                        end
+                    local distance = (Vector2.new(screenpos.X, screenpos.Y) - mousepos).Magnitude
+
+                    if Settings.FOV.Enabled and distance > Settings.FOV.Radius then continue end
+
+                    if distance < closestdistance then
+                        closestdistance = distance
+                        closestpart = humanoidrootpart
                     end
                 end
             end
@@ -185,27 +126,32 @@ local function getclosestplayer()
 end
 
 local closesthitpart = nil
-local mobileAimbotActive = false
 
--- Mobile aim assist (tap to aim)
-local function onTouchBegan(touch)
-    if isMobile and Settings.Aimbot and closesthitpart then
-        mobileAimbotActive = true
-    end
+
+local function aimAt(targetPart)
+    if not targetPart or not camera then return end
+    
+    local head = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head")
+    if not head then return end
+    
+    -- Calculate look direction
+    local aimPosition = targetPart.Position
+    local cameraPosition = camera.CFrame.Position
+    
+    -- Create CFrame looking at target
+    local lookCFrame = CFrame.lookAt(cameraPosition, aimPosition)
+    
+    -- Smooth interpolation
+    local smoothness = math.max(Settings.AimbotSmoothness, 0.1)
+    local alpha = 1 / smoothness
+    
+    camera.CFrame = camera.CFrame:Lerp(lookCFrame, alpha)
 end
 
-local function onTouchEnded(touch)
-    if isMobile then
-        mobileAimbotActive = false
-    end
-end
-
-UserInputService.TouchStarted:Connect(onTouchBegan)
-UserInputService.TouchEnded:Connect(onTouchEnded)
 
 RunService.Heartbeat:Connect(function()
     closesthitpart = (Settings.SilentAim or Settings.Aimbot) and getclosestplayer() or nil
-    
+
     if Settings.FOV.Enabled then
         FOVCircle.Visible = true
         FOVCircle.Position = UserInputService:GetMouseLocation()
@@ -215,25 +161,27 @@ RunService.Heartbeat:Connect(function()
         FOVCircle.Visible = false
     end
 
-    -- PC aimbot (right mouse button)
-    if Settings.Aimbot and closesthitpart and not isMobile and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-        local screenpos, onscreen = camera:WorldToViewportPoint(closesthitpart.Position)
-        if onscreen then
-            local mousepos = UserInputService:GetMouseLocation()
-            local moveX = (screenpos.X - mousepos.X) / Settings.AimbotSmoothness
-            local moveY = (screenpos.Y - mousepos.Y) / Settings.AimbotSmoothness
-            mousemoverel(moveX, moveY)
-        end
-    end
+    -- Aimbot - works on BOTH mobile and PC
+    if Settings.Aimbot and closesthitpart then
+        local shouldAim = false
 
-    -- Mobile aimbot (touch based)
-    if Settings.Aimbot and closesthitpart and isMobile and mobileAimbotActive then
-        local screenpos, onscreen = camera:WorldToViewportPoint(closesthitpart.Position)
-        if onscreen then
-            local mousepos = UserInputService:GetMouseLocation()
-            local moveX = (screenpos.X - mousepos.X) / Settings.AimbotSmoothness
-            local moveY = (screenpos.Y - mousepos.Y) / Settings.AimbotSmoothness
-            mousemoverel(moveX, moveY)
+        if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+            shouldAim = true
+        end
+
+        -- Mobile: Touch detected OR MobileAimLock enabled
+        if Settings.MobileAimLock then
+            local touches = UserInputService:GetTouchInputs()
+            if UserInputService.TouchEnabled or #touches > 0 then
+                shouldAim = true
+            end
+        end
+
+        if shouldAim then
+            local screenpos, onscreen = camera:WorldToViewportPoint(closesthitpart.Position)
+            if onscreen then
+                aimAt(closesthitpart)
+            end
         end
     end
 end)
@@ -249,75 +197,135 @@ end)
 
 local oldnamecall
 oldnamecall = hookmetamethod(game, "__namecall", newcclosure(function(...)
-    local method, arguments = getnamecallmethod(), {...}
-    local self = arguments[1]
+    local method = getnamecallmethod()
+    local args = { ... }
+    local self = args[1]
 
     if self == Workspace and not checkcaller() and method == "Raycast" then
         local hitpart = closesthitpart
 
         if Settings.SilentAim and hitpart then
-            local origin = arguments[2]
+            local origin = args[2]
             local direction = getdirection(origin, hitpart.Position) * 1000
-            arguments[2], arguments[3] = origin, direction
-            return oldnamecall(unpack(arguments))
+            args[2], args[3] = origin, direction
+            return oldnamecall(unpack(args))
         end
     end
     return oldnamecall(...)
 end))
 
-CombatTab:AddSection("Aim Settings")
 
-CombatTab:AddToggle("SilentAim", {
-    Title = "Silent Aim",
+local CombatGroup = Tabs.Combat:AddLeftGroupbox("Aim Settings")
+
+CombatGroup:AddToggle("SilentAim", {
+    Text = "Silent Aim",
     Default = false,
-    Callback = function(Value) Settings.SilentAim = Value end
+    Tooltip = "Redirects bullets to closest target",
+    Callback = function(Value) Settings.SilentAim = Value end,
 })
+Toggles.SilentAim:OnChanged(function()
+    Settings.SilentAim = Toggles.SilentAim.Value
+end)
 
-CombatTab:AddToggle("Aimbot", {
-    Title = "Aimbot",
+CombatGroup:AddToggle("Aimbot", {
+    Text = "Aimbot",
     Default = false,
-    Callback = function(Value) Settings.Aimbot = Value end
+    Tooltip = "PC: Hold RMB | Mobile: Enable Mobile Aim Lock",
+    Callback = function(Value) Settings.Aimbot = Value end,
 })
+Toggles.Aimbot:OnChanged(function()
+    Settings.Aimbot = Toggles.Aimbot.Value
+end)
 
-CombatTab:AddSlider("Smoothness", {
-    Title = "Aimbot Smoothness",
+-- Add "B" label to Aimbot toggle button
+task.spawn(function()
+    task.wait(0.3)
+    if Toggles.Aimbot and Toggles.Aimbot.Button then
+        local bLabel = Instance.new("TextLabel")
+        bLabel.Size = UDim2.new(0, 18, 0, 18)
+        bLabel.Position = UDim2.new(0.5, -9, 0.5, -9)
+        bLabel.BackgroundTransparency = 1
+        bLabel.Text = "B"
+        bLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        bLabel.TextSize = 14
+        bLabel.Font = Enum.Font.SourceSansBold
+        bLabel.TextScaled = true
+        bLabel.Parent = Toggles.Aimbot.Button
+        bLabel.ZIndex = 10
+    end
+end)
+
+CombatGroup:AddSlider("Smoothness", {
+    Text = "Aimbot Smoothness",
     Default = 2,
     Min = 1,
     Max = 10,
     Rounding = 1,
-    Callback = function(Value) Settings.AimbotSmoothness = Value end
+    Suffix = "x",
+    Callback = function(Value)
+        Settings.AimbotSmoothness = Value
+    end,
 })
+Options.Smoothness:OnChanged(function()
+    Settings.AimbotSmoothness = Options.Smoothness.Value
+end)
 
-CombatTab:AddToggle("TeamCheck", {
-    Title = "Team Check",
+CombatGroup:AddToggle("TeamCheck", {
+    Text = "Team Check",
     Default = true,
-    Callback = function(Value) Settings.TeamCheck = Value end
+    Callback = function(Value) Settings.TeamCheck = Value end,
 })
+Toggles.TeamCheck:OnChanged(function()
+    Settings.TeamCheck = Toggles.TeamCheck.Value
+end)
 
-CombatTab:AddToggle("VisibleCheck", {
-    Title = "Visibility Check",
+CombatGroup:AddToggle("VisibleCheck", {
+    Text = "Visibility Check",
     Default = true,
-    Callback = function(Value) Settings.VisibleCheck = Value end
+    Tooltip = "Only targets visible players",
+    Callback = function(Value) Settings.VisibleCheck = Value end,
 })
+Toggles.VisibleCheck:OnChanged(function()
+    Settings.VisibleCheck = Toggles.VisibleCheck.Value
+end)
 
-CombatTab:AddSection("FOV Settings")
+CombatGroup:AddDivider()
+CombatGroup:AddLabel("FOV Settings")
 
-CombatTab:AddToggle("FOVEnabled", {
-    Title = "Enable FOV Circle",
+CombatGroup:AddToggle("FOVEnabled", {
+    Text = "Enable FOV Circle",
     Default = false,
-    Callback = function(Value) Settings.FOV.Enabled = Value end
+    Callback = function(Value) Settings.FOV.Enabled = Value end,
 })
+Toggles.FOVEnabled:OnChanged(function()
+    Settings.FOV.Enabled = Toggles.FOVEnabled.Value
+end)
 
-CombatTab:AddSlider("FOVRadius", {
-    Title = "FOV Radius",
+CombatGroup:AddSlider("FOVRadius", {
+    Text = "FOV Radius",
     Default = 100,
     Min = 10,
     Max = 400,
     Rounding = 0,
-    Callback = function(Value) Settings.FOV.Radius = Value end
+    Suffix = "px",
+    Callback = function(Value)
+        Settings.FOV.Radius = Value
+    end,
+})
+Options.FOVRadius:OnChanged(function()
+    Settings.FOV.Radius = Options.FOVRadius.Value
+end)
+
+CombatGroup:AddLabel("FOV Color"):AddColorPicker("FOVColor", {
+    Default = Color3.fromRGB(0, 110, 255),
+    Title = "FOV Color",
+    Callback = function(Value)
+        Settings.FOV.Color = Value
+    end,
 })
 
-VisualTab:AddSection("ESP")
+
+local VisualGroup = Tabs.Visuals:AddLeftGroupbox("ESP Settings")
 
 local ESPFolder = Instance.new("Folder", CoreGui)
 ESPFolder.Name = "BlueBerry_ESP_Storage"
@@ -328,7 +336,9 @@ local function createESP(player)
         character:WaitForChild("HumanoidRootPart", 5)
         character:WaitForChild("Humanoid", 5)
 
-        if ESPFolder:FindFirstChild(player.Name) then ESPFolder[player.Name]:Destroy() end
+        if ESPFolder:FindFirstChild(player.Name) then
+            ESPFolder[player.Name]:Destroy()
+        end
 
         local container = Instance.new("Folder", ESPFolder)
         container.Name = player.Name
@@ -384,6 +394,7 @@ local function createESP(player)
             updateHP(character.Humanoid.Health)
         end
 
+        -- Render loop for ESP visibility
         local loop
         loop = RunService.RenderStepped:Connect(function()
             if not player.Parent or not character.Parent or not container.Parent then
@@ -406,76 +417,225 @@ local function createESP(player)
         end)
     end
 
-    if player.Character then applyESP(player.Character) end
+    if player.Character then
+        applyESP(player.Character)
+    end
     player.CharacterAdded:Connect(applyESP)
 end
 
-for _, p in pairs(Players:GetPlayers()) do createESP(p) end
+for _, p in pairs(Players:GetPlayers()) do
+    createESP(p)
+end
 Players.PlayerAdded:Connect(createESP)
 
-VisualTab:AddToggle("ESPEnabled", { Title = "Enable ESP", Default = false, Callback = function(Value) Settings.ESP.Enabled = Value end })
-VisualTab:AddToggle("Chams", { Title = "Chams", Default = false, Callback = function(Value) Settings.ESP.Chams = Value end })
-VisualTab:AddToggle("Names", { Title = "Name ESP", Default = false, Callback = function(Value) Settings.ESP.Names = Value end })
-VisualTab:AddToggle("Health", { Title = "Health ESP", Default = false, Callback = function(Value) Settings.ESP.Health = Value end })
-VisualTab:AddToggle("ESPTeamCheck", { Title = "Team Check", Default = true, Callback = function(Value) Settings.ESP.TeamCheck = Value end })
+VisualGroup:AddToggle("ESPEnabled", {
+    Text = "Enable ESP",
+    Default = false,
+    Callback = function(Value) Settings.ESP.Enabled = Value end,
+})
+Toggles.ESPEnabled:OnChanged(function()
+    Settings.ESP.Enabled = Toggles.ESPEnabled.Value
+end)
 
-TeleportTab:AddSection("Locations")
+VisualGroup:AddToggle("Chams", {
+    Text = "Chams (Wallhack)",
+    Default = false,
+    Callback = function(Value) Settings.ESP.Chams = Value end,
+})
+Toggles.Chams:OnChanged(function()
+    Settings.ESP.Chams = Toggles.Chams.Value
+end)
 
+VisualGroup:AddToggle("Names", {
+    Text = "Player Names",
+    Default = false,
+    Callback = function(Value) Settings.ESP.Names = Value end,
+})
+Toggles.Names:OnChanged(function()
+    Settings.ESP.Names = Toggles.Names.Value
+end)
+
+VisualGroup:AddToggle("Health", {
+    Text = "Health Display",
+    Default = false,
+    Callback = function(Value) Settings.ESP.Health = Value end,
+})
+Toggles.Health:OnChanged(function()
+    Settings.ESP.Health = Toggles.Health.Value
+end)
+
+VisualGroup:AddToggle("ESPTeamCheck", {
+    Text = "Team Check",
+    Default = true,
+    Callback = function(Value) Settings.ESP.TeamCheck = Value end,
+})
+Toggles.ESPTeamCheck:OnChanged(function()
+    Settings.ESP.TeamCheck = Toggles.ESPTeamCheck.Value
+end)
+
+
+local TeleportGroup = Tabs.Teleport:AddLeftGroupbox("Teleport Locations")
+
+-- Removed Yard and Gas Station as requested
 local Locations = {
-    ["Prison"] = Vector3.new(910,100,2380),
-    ["Yard"] = Vector3.new(820,100,2430),
-    ["Armory"] = Vector3.new(820,100,2450),
-    ["Crim Base"] = Vector3.new(-850,100,2000)
+    ["Prison"] = Vector3.new(910, 100, 2380),
+    ["Armory"] = Vector3.new(820, 100, 2450),
+    ["Crim Base"] = Vector3.new(-850, 100, 2000),
+    ["Cafe"] = Vector3.new(900, 100, 2420),
+    ["Park"] = Vector3.new(800, 100, 2480),
+    ["Bank"] = Vector3.new(950, 100, 2400),
 }
 
 for Name, Position in pairs(Locations) do
-    TeleportTab:AddButton({
-        Title = Name,
-        Callback = function()
+    TeleportGroup:AddButton({
+        Text = Name,
+        Func = function()
             local Character = LocalPlayer.Character
             if Character and Character:FindFirstChild("HumanoidRootPart") then
                 Character.HumanoidRootPart.CFrame = CFrame.new(Position)
+                Library:Notify({
+                    Title = "BlueBerry Hub",
+                    Description = "Teleported to " .. Name,
+                    Time = 2,
+                })
             end
-        end
+        end,
     })
 end
 
-MiscTab:AddSection("Player")
 
-MiscTab:AddSlider("WalkSpeed", {
-    Title = "Walk Speed",
+local MiscGroup = Tabs.Misc:AddLeftGroupbox("Player Settings")
+
+MiscGroup:AddSlider("WalkSpeed", {
+    Text = "Walk Speed",
     Default = 16,
     Min = 16,
     Max = 100,
     Rounding = 0,
+    Suffix = " studs/s",
     Callback = function(Value)
         local Character = LocalPlayer.Character
         if Character and Character:FindFirstChild("Humanoid") then
             Character.Humanoid.WalkSpeed = Value
         end
-    end
+    end,
 })
+Options.WalkSpeed:OnChanged(function()
+    local Character = LocalPlayer.Character
+    if Character and Character:FindFirstChild("Humanoid") then
+        Character.Humanoid.WalkSpeed = Options.WalkSpeed.Value
+    end
+end)
 
-MiscTab:AddToggle("InfiniteJump", {
-    Title = "Infinite Jump",
+MiscGroup:AddToggle("InfiniteJump", {
+    Text = "Infinite Jump",
     Default = false,
-    Callback = function(Value) Settings.InfiniteJump = Value end
+    Callback = function(Value) Settings.InfiniteJump = Value end,
+})
+Toggles.InfiniteJump:OnChanged(function()
+    Settings.InfiniteJump = Toggles.InfiniteJump.Value
+end)
+
+-- Mobile Controls
+MiscGroup:AddDivider()
+MiscGroup:AddLabel("Mobile Controls")
+
+MiscGroup:AddToggle("MobileAimLock", {
+    Text = "Mobile Aim Lock",
+    Default = false,
+    Tooltip = "Enable this on mobile to use aimbot (auto-aims while touching screen)",
+    Callback = function(Value)
+        Settings.MobileAimLock = Value
+    end,
+})
+Toggles.MobileAimLock:OnChanged(function()
+    Settings.MobileAimLock = Toggles.MobileAimLock.Value
+end)
+
+
+local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu Settings")
+
+MenuGroup:AddToggle("KeybindMenuOpen", {
+    Default = Library.KeybindFrame.Visible,
+    Text = "Open Keybind Menu",
+    Callback = function(value)
+        Library.KeybindFrame.Visible = value
+    end,
 })
 
-SettingsTab:AddSection("Interface")
-
-SettingsTab:AddButton({
-    Title = "Unload",
-    Callback = function()
-        FOVCircle:Destroy()
-        ESPFolder:Destroy()
-        TouchGui:Destroy()
-        Fluent:Destroy()
-    end
+MenuGroup:AddToggle("ShowCustomCursor", {
+    Text = "Custom Cursor",
+    Default = true,
+    Callback = function(Value)
+        Library.ShowCustomCursor = Value
+    end,
 })
 
-Fluent:Notify({
+MenuGroup:AddDropdown("NotificationSide", {
+    Values = { "Left", "Right" },
+    Default = "Right",
+    Text = "Notification Side",
+    Callback = function(Value)
+        Library:SetNotifySide(Value)
+    end,
+})
+
+MenuGroup:AddDropdown("DPIDropdown", {
+    Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
+    Default = "100%",
+    Text = "DPI Scale",
+    Callback = function(Value)
+        Value = Value:gsub("%%", "")
+        local DPI = tonumber(Value)
+        Library:SetDPIScale(DPI)
+    end,
+})
+
+MenuGroup:AddSlider("UICornerSlider", {
+    Text = "Corner Radius",
+    Default = Library.CornerRadius,
+    Min = 0,
+    Max = 20,
+    Rounding = 0,
+    Callback = function(value)
+        Window:SetCornerRadius(value)
+    end,
+})
+
+MenuGroup:AddDivider()
+MenuGroup:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", {
+    Default = "RightShift",
+    NoUI = true,
+    Text = "Menu keybind",
+})
+
+MenuGroup:AddButton("Unload Script", function()
+    FOVCircle:Destroy()
+    ESPFolder:Destroy()
+    Library:Unload()
+end)
+
+Library.ToggleKeybind = Options.MenuKeybind
+
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+
+ThemeManager:SetFolder("BlueBerryHub")
+SaveManager:SetFolder("BlueBerryHub/specific-game")
+SaveManager:SetSubFolder("specific-place")
+
+SaveManager:BuildConfigSection(Tabs["UI Settings"])
+ThemeManager:ApplyToTab(Tabs["UI Settings"])
+
+-- Load autoload config
+SaveManager:LoadAutoloadConfig()
+
+Library:Notify({
     Title = "BlueBerry Hub",
-    Content = "Loaded Successfully! (B to toggle)",
-    Duration = 5
+    Description = "Loaded Successfully! Aimbot fixed + Mobile support",
+    Time = 5,
 })
